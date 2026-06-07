@@ -17,16 +17,19 @@ Usage:
 
 After the workflow loads, a small REPL appears::
 
-    annotate | train | status | quit > _
+    [iter=latest] annotate | train | status | use <N> | quit > _
 
   - ``annotate``  Opens the PyQt5 annotator on the current iteration.
   - ``train``     Trains on the current iteration, generates predictions,
                   advances to the next iteration.
   - ``status``    Prints the iteration table for the session.
+  - ``use <N>``   Switch the current iteration target. ``use 3`` operates on
+                  ``iteration_3`` for subsequent annotate/train calls; ``use
+                  latest`` returns to dynamic latest-iter targeting.
   - ``quit``      Exits.
 
-You can target a specific past iteration with ``--iteration N`` instead of
-the default ``latest``.
+You can also set the initial iteration with ``--iteration N`` instead of the
+default ``latest``.
 """
 
 from __future__ import annotations
@@ -81,7 +84,7 @@ def repl(workflow: Workflow) -> None:
     print()
     while True:
         try:
-            cmd = input("annotate | train | status | quit > ").strip().lower()
+            cmd = input(f"[iter={workflow.iteration}] annotate | train | status | use <N> | quit > ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -102,10 +105,27 @@ def repl(workflow: Workflow) -> None:
             print()
             print_status(workflow)
             print()
+        elif cmd.startswith("use "):
+            target = cmd[4:].strip()
+            if target == "latest":
+                workflow.iteration = "latest"
+                print(f"  → now targeting: latest\n")
+            else:
+                try:
+                    n = int(target)
+                    iters = workflow.view.iterations
+                    valid = [s.number for s in iters]
+                    if n not in valid:
+                        print(f"  iteration {n} does not exist. Available: {valid}\n")
+                    else:
+                        workflow.iteration = n
+                        print(f"  → now targeting: iteration_{n}\n")
+                except ValueError:
+                    print(f"  use expects an integer or 'latest', got: {target!r}\n")
         elif cmd == "":
             continue
         else:
-            print(f"Unknown command: {cmd!r}. Type 'annotate', 'train', 'status', or 'quit'.")
+            print(f"Unknown command: {cmd!r}. Type 'annotate', 'train', 'status', 'use <N>', or 'quit'.")
 
 
 def main():
