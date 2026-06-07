@@ -49,21 +49,33 @@ form), an annotate call, and a train call. The widget is one driver of the
 
 ### Driver 2 — Terminal (scriptable)
 
+Four subcommands, each scoped to what it needs:
+
 ```bash
-python cli.py \
-    --dataset configs/datasets/vaihingen_1k_v3.yaml \
-    --training configs/training/unet_efficientnet_b7.yaml \
-    --session Sessions/my_run
+# Fast status — no model load (~0.5s)
+python cli.py status --session Sessions/my_run
+
+# One-shot annotate (load model, open GUI, return)
+python cli.py annotate --dataset configs/datasets/X.yaml \
+                      --training configs/training/Y.yaml \
+                      --session Sessions/my_run
+
+# One-shot train (load model, train, advance iter)
+python cli.py train --dataset ... --training ... --session ...
+
+# Interactive REPL (load model once, multiple commands)
+python cli.py repl --dataset ... --training ... --session ...
 ```
 
-A small REPL opens:
+The REPL prompt shows the current iteration target and accepts the four
+commands plus `use <N>` to switch iter:
 
 ```
-annotate | train | status | quit > _
+[iter=latest] annotate | train | status | use <N> | quit > _
 ```
 
-Same `Workflow` API as the notebook, no GUI dependency beyond the PyQt5
-annotator window itself.
+`status` is the only subcommand that doesn't load the model — useful for
+scripting and quick checks.
 
 ### Driver 3 — Your own script (programmatic)
 
