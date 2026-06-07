@@ -1,0 +1,47 @@
+# Lightweight training config for the BSB toy. Uses U-Net + EfficientNet-B0
+# (the smaller cousin of the paper's B7) so the example fits in 4 GB VRAM and
+# runs in a couple of minutes. Switch to the paper's b7 config when you have
+# the budget.
+
+name: "UNet-EfficientNetB0-Toy"
+
+model:
+  architecture: "Unet"
+  encoder: "efficientnet-b0"
+  encoder_weights: "imagenet"
+  activation: "softmax"
+  in_channels: 3
+
+training:
+  learning_rate: 0.0001
+  batch_size:
+    train: 10
+    val: 10
+  num_epochs: 20         # vs 100 in the paper — toy convergence only
+  device: "cuda"
+  num_workers: 0
+
+loss:
+  train:
+    name: "EWDLMulticlass"
+    params:
+      eps: 1.0
+      wrong_penalty: 5.0
+      activation: null
+  validation:
+    name: "CrossEntropyLoss"
+    params: {}
+
+optimizer:
+  name: "Adam"
+  params:
+    lr: 0.0001
+
+metrics:
+  - "mIoU"
+
+checkpointing:
+  save_best: true
+  monitor_metric: "val_loss"
+  mode: "min"
+  save_interval: null

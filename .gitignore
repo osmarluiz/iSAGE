@@ -41,10 +41,12 @@ results/
 # Crash diagnostics from the annotator
 annotator_crash.log
 
-# Datasets — users bring their own (match dirs, junctions, and symlinks)
-DATASETS
-data
-VAIHINGEN_3
-VAIHINGEN
-BSB_*
+# Datasets — users bring their own (match dirs, junctions, and symlinks).
+# Only excluded at the repo root, not inside examples/ where we ship a
+# small redistributable subset for reproducibility.
+/DATASETS
+/data
+/VAIHINGEN_3
+/VAIHINGEN
+/BSB_*
 *_dataset

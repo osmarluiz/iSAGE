@@ -1,0 +1,49 @@
+# BSB toy dataset — a 30-patch subset of the BsB Aerial multiclass dataset
+# from Carvalho et al. 2022 (de2022bounding, de2022panoptic, de2022rethinking).
+# Patches selected for full 5-class diversity. Designed to run end-to-end in
+# under ~3 minutes on a single GPU as the Software Impacts reproducibility
+# example.
+
+name: BSB_TOY
+type: semantic_segmentation
+
+paths:
+  train_images: examples/bsb_toy/image_train
+  train_dense_masks: examples/bsb_toy/mask_train       # reference dense GT (not used by iSAGE training)
+  train_sparse_masks: examples/bsb_toy/sparse_masks_iter0   # iteration_0 seed
+  val_images: examples/bsb_toy/image_val
+  val_masks: examples/bsb_toy/mask_val
+  test_images: null
+  test_masks: null
+
+image:
+  height: 256
+  width: 256
+  channels: 3
+  format: png
+
+normalization:
+  mean: [0.3886, 0.3943, 0.3281]
+  std: [0.2250, 0.1881, 0.1834]
+
+classes:
+  num_classes: 5
+  ignore_index: 5
+  names:
+    - background
+    - car
+    - road
+    - building
+    - permeable_area
+  colors:
+    - [0, 0, 0]
+    - [255, 255, 0]
+    - [128, 128, 128]
+    - [0, 0, 255]
+    - [0, 255, 0]
+
+augmentation:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: true
+  rotation: 0
