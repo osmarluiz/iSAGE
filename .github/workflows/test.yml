@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install CPU-only dependencies
+        # The test suite mocks setup_training and the dataloader path is fast,
+        # so the heavy torch+CUDA install is unnecessary for CI. Use the CPU
+        # wheels which install in a few seconds.
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            torch --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            numpy pillow pyyaml pandas matplotlib imageio tqdm \
+            ipywidgets jupyter timm pytest
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
