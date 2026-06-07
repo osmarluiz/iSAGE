@@ -115,16 +115,29 @@ def create_dataloaders(dataset_config, training_config, masks_dir):
     if len(train_images) != len(train_masks):
         raise ValueError(f"Mismatch: {len(train_images)} images but {len(train_masks)} masks")
 
-    # Get validation images and masks
-    val_images_dir = Path(dataset_config['paths']['val_images'])
-    val_masks_dir = Path(dataset_config['paths']['val_masks'])
-    val_images = sorted(list(val_images_dir.glob('*.png')) +
-                       list(val_images_dir.glob('*.tif')) +
-                       list(val_images_dir.glob('*.tiff')))
-    val_masks = sorted(list(val_masks_dir.glob('*.png')))
-
-    print(f"  Val images:   {len(val_images)}")
-    print(f"  Val masks:    {len(val_masks)}")
+    # Get validation images and masks (optional — None or missing dir = no val pass)
+    val_images_path = dataset_config['paths'].get('val_images')
+    val_masks_path = dataset_config['paths'].get('val_masks')
+    val_available = (
+        val_images_path is not None
+        and val_masks_path is not None
+        and Path(val_images_path).exists()
+        and Path(val_masks_path).exists()
+    )
+    if val_available:
+        val_images_dir = Path(val_images_path)
+        val_masks_dir = Path(val_masks_path)
+        val_images = sorted(list(val_images_dir.glob('*.png')) +
+                           list(val_images_dir.glob('*.tif')) +
+                           list(val_images_dir.glob('*.tiff')))
+        val_masks = sorted(list(val_masks_dir.glob('*.png')))
+        print(f"  Val images:   {len(val_images)}")
+        print(f"  Val masks:    {len(val_masks)}")
+        if not val_images or not val_masks:
+            val_available = False
+            print(f"  → val directories empty; training without validation")
+    else:
+        print(f"  Val images:   (none — training without validation)")
 
     # Get ignore index from configuration
     ignore_index = dataset_config['classes']['ignore_index']
@@ -162,14 +175,6 @@ def create_dataloaders(dataset_config, training_config, masks_dir):
         augment=True,
     )
 
-    val_dataset = CustomDataset(
-        val_images,
-        val_masks,
-        ignore_index=ignore_index,
-        transform=base_transform,
-        augment=False,
-    )
-
     # Create data loaders
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -179,16 +184,29 @@ def create_dataloaders(dataset_config, training_config, masks_dir):
         pin_memory=True  # Faster CPU→GPU transfer
     )
 
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=training_config['training']['batch_size']['val'],
-        shuffle=False,
-        num_workers=0,
-        pin_memory=True  # Faster CPU→GPU transfer
-    )
+    if val_available:
+        val_dataset = CustomDataset(
+            val_images,
+            val_masks,
+            ignore_index=ignore_index,
+            transform=base_transform,
+            augment=False,
+        )
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=training_config['training']['batch_size']['val'],
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+        )
+    else:
+        val_loader = None
 
     print(f"✓ Dataloaders created")
     print(f"  Train batches: {len(train_loader)}")
-    print(f"  Val batches:   {len(val_loader)}\n")
+    if val_loader is not None:
+        print(f"  Val batches:   {len(val_loader)}\n")
+    else:
+        print(f"  Val batches:   none\n")
 
     return train_loader, val_loader, train_images, base_transform, class_pixel_counts

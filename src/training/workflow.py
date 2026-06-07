@@ -562,9 +562,13 @@ def run_training_iteration(
 
         # Validate with the same TP/FP/FN-based mIoU used in metrics_history.csv
         # so best-checkpoint selection matches the reported metric.
-        val_loss_value, real_miou = evaluate_real_metrics(
-            model, val_loader, val_loss, device, eval_num_classes, eval_ignore_index,
-        )
+        # Skipped entirely when no validation set is configured.
+        if val_loader is not None:
+            val_loss_value, real_miou = evaluate_real_metrics(
+                model, val_loader, val_loss, device, eval_num_classes, eval_ignore_index,
+            )
+        else:
+            val_loss_value, real_miou = None, None
 
         # Track metrics
         train_loss_key = [k for k in train_logs.keys() if 'loss' in k.lower()][0]
@@ -581,22 +585,31 @@ def run_training_iteration(
                 model, test_loader, val_loss, device, eval_num_classes, eval_ignore_index,
             )
         # Append to per-epoch trajectory CSV (always, regardless of best).
+        # When val is disabled, the val_loss/val_miou columns stay empty.
         epoch_csv = session_path / f"iteration_{current_iter}" / "epoch_metrics.csv"
         epoch_csv.parent.mkdir(parents=True, exist_ok=True)
         write_header = not epoch_csv.exists()
+        val_loss_str = f"{val_loss_value:.6f}" if val_loss_value is not None else ""
+        val_miou_str = f"{real_miou:.6f}" if real_miou is not None else ""
+        test_loss_str = f"{test_loss_value:.6f}" if test_loss_value is not None else ""
+        test_miou_str = f"{test_miou:.6f}" if test_miou is not None else ""
         with open(epoch_csv, "a") as ef:
             if write_header:
                 ef.write("epoch,train_loss,val_loss,val_miou,test_loss,test_miou,lr\n")
             ef.write(
                 f"{epoch + 1},{train_logs[train_loss_key]:.6f},"
-                f"{val_loss_value:.6f},{real_miou:.6f},"
-                f"{test_loss_value if test_loss_value is not None else ''},"
-                f"{test_miou if test_miou is not None else ''},"
+                f"{val_loss_str},{val_miou_str},"
+                f"{test_loss_str},{test_miou_str},"
                 f"{current_lr:.6e}\n"
             )
 
-        # Save best model based on HIGHEST real validation mIoU
-        if real_miou > best_miou:
+        # Save best model. Without validation we fall back to the paper's
+        # "final-epoch is the model that ships" rule (§4.1) — overwrite each
+        # epoch so best_model.pth == latest_model.pth at the end.
+        if val_loader is None:
+            models_dir.mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), models_dir / 'best_model.pth')
+        elif real_miou > best_miou:
             best_miou = real_miou
             models_dir.mkdir(parents=True, exist_ok=True)
             torch.save(model.state_dict(), models_dir / 'best_model.pth')
@@ -609,19 +622,24 @@ def run_training_iteration(
             models_dir.mkdir(parents=True, exist_ok=True)
             ckpt_path = models_dir / f'epoch_{epoch + 1:03d}.pth'
             torch.save(model.state_dict(), ckpt_path)
-            print(f"→ Checkpoint saved: {ckpt_path.name} (val mIoU: {real_miou:.4f})")
+            ckpt_miou_str = f" (val mIoU: {real_miou:.4f})" if real_miou is not None else ""
+            print(f"→ Checkpoint saved: {ckpt_path.name}{ckpt_miou_str}")
 
         print()
 
     print(f"✓ Training complete!")
-    print(f"✓ Best mIoU: {best_miou:.4f}\n")
+    if val_loader is not None:
+        print(f"✓ Best mIoU: {best_miou:.4f}\n")
+    else:
+        print(f"✓ Trained without validation — final-epoch model is the deployed model (per paper §4.1)\n")
 
     # Save the final-epoch model state before loading best-val for predictions.
     # This lets downstream analysis compare best-val vs last-epoch performance,
     # which addresses the "is a validation set required?" question empirically.
     models_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), models_dir / 'final_model.pth')
-    print(f"→ Final-epoch model saved: final_model.pth (val mIoU at last epoch: {val_ious[-1]:.4f})\n")
+    final_miou_str = f" (val mIoU at last epoch: {val_ious[-1]:.4f})" if val_ious[-1] is not None else ""
+    print(f"→ Final-epoch model saved: final_model.pth{final_miou_str}\n")
 
     # Load best model for predictions
     model.load_state_dict(torch.load(models_dir / 'best_model.pth'))
@@ -712,158 +730,171 @@ def run_training_iteration(
     print(f"✓ Generated {num_predictions} predictions\n")
 
     # ============================================================
-    # STEP 6: Calculate Metrics
+    # STEP 6: Calculate Metrics — only when a validation set is configured.
+    # Without val data we skip metrics_history.csv (no labeled signal to
+    # compute mIoU against). Training and predictions still complete.
     # ============================================================
-    print(f"{'='*60}")
-    print(f"STEP 5: Calculate Metrics")
-    print(f"{'-'*60}\n")
-
-    # Calculate detailed per-class metrics on validation set
-    all_preds = []
-    all_targets = []
-
     num_classes = dataset_config['classes']['num_classes']
     ignore_index = dataset_config['classes']['ignore_index']
     class_names = dataset_config['classes']['names']
     binary_task = num_classes == 1
 
-    model.eval()
-    with torch.no_grad():
-        for images, targets in val_loader:
-            images = images.to(device)
-            outputs = model(images)
-            if binary_task and outputs.dim() == 4 and outputs.size(1) == 1:
-                preds = (outputs.squeeze(1) > 0.5).long().cpu().numpy()
-            else:
-                preds = outputs.argmax(dim=1).cpu().numpy()
-
-            all_preds.extend(preds.flatten())
-            all_targets.extend(targets.numpy().flatten())
-
-    all_preds = np.array(all_preds)
-    all_targets = np.array(all_targets)
-
-    # Filter out ignore_index
-    valid_mask = all_targets != ignore_index
-    all_preds_filtered = all_preds[valid_mask]
-    all_targets_filtered = all_targets[valid_mask]
-
-    # Pixel accuracy
-    pixel_accuracy = (all_preds_filtered == all_targets_filtered).mean()
-
-    # Compute confusion matrix — binary tasks track 2 labels (bg, fg) even
-    # though the model has a single output channel.
-    cm_size = 2 if binary_task else num_classes
-    cm_labels = list(range(cm_size))
-    cm = confusion_matrix(all_targets_filtered, all_preds_filtered, labels=cm_labels)
-
-    # Extract per-class TP, FP, FN
-    tp = np.diag(cm)  # True Positives for each class
-    fn = cm.sum(axis=1) - tp  # False Negatives
-    fp = cm.sum(axis=0) - tp  # False Positives
-
-    # Compute precision, recall, and F1-score for each class
-    precision, recall, f1_score, _ = precision_recall_fscore_support(
-        all_targets_filtered, all_preds_filtered, average=None, labels=cm_labels, zero_division=0
-    )
-
-    # Compute per-class IoU
-    iou_per_class = tp / (tp + fp + fn + 1e-8)  # Avoid division by zero
-    if binary_task:
-        # Foreground IoU only — matches binary task paper-table convention.
-        mean_iou = float(iou_per_class[1])
+    if val_loader is None:
+        print(f"{'='*60}")
+        print(f"STEP 5: Skipped — no validation set configured")
+        print(f"{'-'*60}\n")
+        mean_iou = None
+        pixel_accuracy = None
+        precision = None
+        recall = None
+        f1_score = None
+        iou_per_class = None
     else:
-        mean_iou = np.mean(iou_per_class)
+        print(f"{'='*60}")
+        print(f"STEP 5: Calculate Metrics")
+        print(f"{'-'*60}\n")
 
-    # Print summary metrics
-    print(f"Validation Metrics Summary:")
-    print(f"  Mean IoU:        {mean_iou:.4f}")
-    print(f"  Mean Precision:  {np.mean(precision):.4f}")
-    print(f"  Mean Recall:     {np.mean(recall):.4f}")
-    print(f"  Mean F1-Score:   {np.mean(f1_score):.4f}")
-    print(f"  Pixel Accuracy:  {pixel_accuracy:.4f}")
-    print(f"  Final Val Loss:  {val_losses[-1]:.4f}")
-    print(f"  Final Train Loss: {train_losses[-1]:.4f}\n")
+        # Calculate detailed per-class metrics on validation set
+        all_preds = []
+        all_targets = []
 
-    # Print per-class metrics — for binary, the class_names list contains only
-    # the foreground name; prepend an explicit background label for clarity.
-    if binary_task:
-        display_names = ['background', class_names[0]] if len(class_names) == 1 else class_names
-    else:
-        display_names = class_names
-    print(f"Per-Class Metrics:")
-    for i in range(cm_size):
-        print(f"  Class {i} ({display_names[i]}): "
-              f"Precision={precision[i]:.4f}, Recall={recall[i]:.4f}, "
-              f"F1={f1_score[i]:.4f}, IoU={iou_per_class[i]:.4f}")
-    print()
+        model.eval()
+        with torch.no_grad():
+            for images, targets in val_loader:
+                images = images.to(device)
+                outputs = model(images)
+                if binary_task and outputs.dim() == 4 and outputs.size(1) == 1:
+                    preds = (outputs.squeeze(1) > 0.5).long().cpu().numpy()
+                else:
+                    preds = outputs.argmax(dim=1).cpu().numpy()
 
-    # Save detailed metrics to CSV
-    metrics_history_file = session_path / 'metrics_history.csv'
+                all_preds.extend(preds.flatten())
+                all_targets.extend(targets.numpy().flatten())
 
-    # Build column names for CSV
-    base_columns = ['iteration', 'miou', 'mean_precision', 'mean_recall', 'mean_f1',
-                    'pixel_accuracy', 'train_loss', 'val_loss',
-                    'total_tp', 'total_fp', 'total_fn',
-                    'total_annotated_pixels']
+        all_preds = np.array(all_preds)
+        all_targets = np.array(all_targets)
 
-    # Add per-class annotated pixel columns. Binary tracks both bg and fg.
-    annotated_pixel_columns = [f'class_{i}_annotated_pixels' for i in range(cm_size)]
+        # Filter out ignore_index
+        valid_mask = all_targets != ignore_index
+        all_preds_filtered = all_preds[valid_mask]
+        all_targets_filtered = all_targets[valid_mask]
 
-    per_class_columns = []
-    for i in range(cm_size):
-        per_class_columns.extend([
-            f'class_{i}_tp', f'class_{i}_fp', f'class_{i}_fn',
-            f'class_{i}_precision', f'class_{i}_recall',
-            f'class_{i}_f1', f'class_{i}_iou'
-        ])
+        # Pixel accuracy
+        pixel_accuracy = (all_preds_filtered == all_targets_filtered).mean()
 
-    all_columns = base_columns + annotated_pixel_columns + per_class_columns
+        # Compute confusion matrix — binary tasks track 2 labels (bg, fg) even
+        # though the model has a single output channel.
+        cm_size = 2 if binary_task else num_classes
+        cm_labels = list(range(cm_size))
+        cm = confusion_matrix(all_targets_filtered, all_preds_filtered, labels=cm_labels)
 
-    if metrics_history_file.exists():
-        metrics_df = pd.read_csv(metrics_history_file)
-    else:
-        metrics_df = pd.DataFrame(columns=all_columns)
+        # Extract per-class TP, FP, FN
+        tp = np.diag(cm)  # True Positives for each class
+        fn = cm.sum(axis=1) - tp  # False Negatives
+        fp = cm.sum(axis=0) - tp  # False Positives
 
-    # Build new row
-    new_row = {
-        'iteration': current_iter,
-        'miou': mean_iou,
-        'mean_precision': np.mean(precision),
-        'mean_recall': np.mean(recall),
-        'mean_f1': np.mean(f1_score),
-        'pixel_accuracy': pixel_accuracy,
-        'train_loss': train_losses[-1],
-        'val_loss': val_losses[-1],
-        'total_tp': int(tp.sum()),
-        'total_fp': int(fp.sum()),
-        'total_fn': int(fn.sum()),
-        'total_annotated_pixels': int(class_pixel_counts.sum())
-    }
+        # Compute precision, recall, and F1-score for each class
+        precision, recall, f1_score, _ = precision_recall_fscore_support(
+            all_targets_filtered, all_preds_filtered, average=None, labels=cm_labels, zero_division=0
+        )
 
-    # Add per-class annotated pixel counts. class_pixel_counts may have only
-    # num_classes entries from the dataloader (binary: 1); pad to cm_size for
-    # the wider per-class columns.
-    for i in range(cm_size):
-        if i < len(class_pixel_counts):
-            new_row[f'class_{i}_annotated_pixels'] = int(class_pixel_counts[i])
+        # Compute per-class IoU
+        iou_per_class = tp / (tp + fp + fn + 1e-8)  # Avoid division by zero
+        if binary_task:
+            # Foreground IoU only — matches binary task paper-table convention.
+            mean_iou = float(iou_per_class[1])
         else:
-            new_row[f'class_{i}_annotated_pixels'] = 0
+            mean_iou = np.mean(iou_per_class)
 
-    # Add per-class metrics — over the full cm_size (binary: 2 = bg + fg).
-    for i in range(cm_size):
-        new_row[f'class_{i}_tp'] = int(tp[i])
-        new_row[f'class_{i}_fp'] = int(fp[i])
-        new_row[f'class_{i}_fn'] = int(fn[i])
-        new_row[f'class_{i}_precision'] = precision[i]
-        new_row[f'class_{i}_recall'] = recall[i]
-        new_row[f'class_{i}_f1'] = f1_score[i]
-        new_row[f'class_{i}_iou'] = iou_per_class[i]
+        # Print summary metrics
+        print(f"Validation Metrics Summary:")
+        print(f"  Mean IoU:        {mean_iou:.4f}")
+        print(f"  Mean Precision:  {np.mean(precision):.4f}")
+        print(f"  Mean Recall:     {np.mean(recall):.4f}")
+        print(f"  Mean F1-Score:   {np.mean(f1_score):.4f}")
+        print(f"  Pixel Accuracy:  {pixel_accuracy:.4f}")
+        print(f"  Final Val Loss:  {val_losses[-1]:.4f}")
+        print(f"  Final Train Loss: {train_losses[-1]:.4f}\n")
 
-    metrics_df.loc[len(metrics_df)] = new_row
-    metrics_df.to_csv(metrics_history_file, index=False)
+        # Print per-class metrics — for binary, the class_names list contains only
+        # the foreground name; prepend an explicit background label for clarity.
+        if binary_task:
+            display_names = ['background', class_names[0]] if len(class_names) == 1 else class_names
+        else:
+            display_names = class_names
+        print(f"Per-Class Metrics:")
+        for i in range(cm_size):
+            print(f"  Class {i} ({display_names[i]}): "
+                  f"Precision={precision[i]:.4f}, Recall={recall[i]:.4f}, "
+                  f"F1={f1_score[i]:.4f}, IoU={iou_per_class[i]:.4f}")
+        print()
 
-    print(f"✓ Metrics saved to {metrics_history_file}\n")
+        # Save detailed metrics to CSV
+        metrics_history_file = session_path / 'metrics_history.csv'
+
+        # Build column names for CSV
+        base_columns = ['iteration', 'miou', 'mean_precision', 'mean_recall', 'mean_f1',
+                        'pixel_accuracy', 'train_loss', 'val_loss',
+                        'total_tp', 'total_fp', 'total_fn',
+                        'total_annotated_pixels']
+
+        # Add per-class annotated pixel columns. Binary tracks both bg and fg.
+        annotated_pixel_columns = [f'class_{i}_annotated_pixels' for i in range(cm_size)]
+
+        per_class_columns = []
+        for i in range(cm_size):
+            per_class_columns.extend([
+                f'class_{i}_tp', f'class_{i}_fp', f'class_{i}_fn',
+                f'class_{i}_precision', f'class_{i}_recall',
+                f'class_{i}_f1', f'class_{i}_iou'
+            ])
+
+        all_columns = base_columns + annotated_pixel_columns + per_class_columns
+
+        if metrics_history_file.exists():
+            metrics_df = pd.read_csv(metrics_history_file)
+        else:
+            metrics_df = pd.DataFrame(columns=all_columns)
+
+        # Build new row
+        new_row = {
+            'iteration': current_iter,
+            'miou': mean_iou,
+            'mean_precision': np.mean(precision),
+            'mean_recall': np.mean(recall),
+            'mean_f1': np.mean(f1_score),
+            'pixel_accuracy': pixel_accuracy,
+            'train_loss': train_losses[-1],
+            'val_loss': val_losses[-1],
+            'total_tp': int(tp.sum()),
+            'total_fp': int(fp.sum()),
+            'total_fn': int(fn.sum()),
+            'total_annotated_pixels': int(class_pixel_counts.sum())
+        }
+
+        # Add per-class annotated pixel counts. class_pixel_counts may have only
+        # num_classes entries from the dataloader (binary: 1); pad to cm_size for
+        # the wider per-class columns.
+        for i in range(cm_size):
+            if i < len(class_pixel_counts):
+                new_row[f'class_{i}_annotated_pixels'] = int(class_pixel_counts[i])
+            else:
+                new_row[f'class_{i}_annotated_pixels'] = 0
+
+        # Add per-class metrics — over the full cm_size (binary: 2 = bg + fg).
+        for i in range(cm_size):
+            new_row[f'class_{i}_tp'] = int(tp[i])
+            new_row[f'class_{i}_fp'] = int(fp[i])
+            new_row[f'class_{i}_fn'] = int(fn[i])
+            new_row[f'class_{i}_precision'] = precision[i]
+            new_row[f'class_{i}_recall'] = recall[i]
+            new_row[f'class_{i}_f1'] = f1_score[i]
+            new_row[f'class_{i}_iou'] = iou_per_class[i]
+
+        metrics_df.loc[len(metrics_df)] = new_row
+        metrics_df.to_csv(metrics_history_file, index=False)
+
+        print(f"✓ Metrics saved to {metrics_history_file}\n")
 
     # ============================================================
     # STEP 7: Create Next Iteration
@@ -900,11 +931,15 @@ def run_training_iteration(
     print(f"ITERATION {current_iter} COMPLETE!")
     print(f"{'='*60}")
     print(f"\nResults:")
-    print(f"  Mean IoU:        {mean_iou:.4f}")
-    print(f"  Mean Precision:  {np.mean(precision):.4f}")
-    print(f"  Mean Recall:     {np.mean(recall):.4f}")
-    print(f"  Mean F1-Score:   {np.mean(f1_score):.4f}")
-    print(f"  Pixel Accuracy:  {pixel_accuracy:.4f}")
+    if mean_iou is not None:
+        print(f"  Mean IoU:        {mean_iou:.4f}")
+        print(f"  Mean Precision:  {np.mean(precision):.4f}")
+        print(f"  Mean Recall:     {np.mean(recall):.4f}")
+        print(f"  Mean F1-Score:   {np.mean(f1_score):.4f}")
+        print(f"  Pixel Accuracy:  {pixel_accuracy:.4f}")
+    else:
+        print(f"  Validation:      skipped (no val set configured)")
+        print(f"  Final Train Loss: {train_losses[-1]:.4f}")
     print(f"  Model saved:     {models_dir / 'best_model.pth'}")
     print(f"  Predictions:     {num_predictions} files")
     print(f"\nNext Steps:")
@@ -919,9 +954,9 @@ def run_training_iteration(
         'iteration': current_iter,
         'success': True,
         'mean_iou': mean_iou,
-        'mean_precision': np.mean(precision),
-        'mean_recall': np.mean(recall),
-        'mean_f1': np.mean(f1_score),
+        'mean_precision': float(np.mean(precision)) if precision is not None else None,
+        'mean_recall': float(np.mean(recall)) if recall is not None else None,
+        'mean_f1': float(np.mean(f1_score)) if f1_score is not None else None,
         'pixel_accuracy': pixel_accuracy,
         'train_loss': train_losses[-1],
         'val_loss': val_losses[-1],
