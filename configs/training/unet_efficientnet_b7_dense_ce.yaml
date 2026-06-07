@@ -1,0 +1,39 @@
+name: "UNet-EfficientNetB7-Dense-CE"
+
+model:
+  architecture: "Unet"
+  encoder: "efficientnet-b7"
+  encoder_weights: "imagenet"
+  activation: "softmax"
+  in_channels: 3
+
+training:
+  learning_rate: 0.0001
+  batch_size:
+    train: 10
+    val: 50
+  num_epochs: 100
+  device: "cuda"
+  num_workers: 0
+
+loss:
+  train:
+    name: "CrossEntropyLoss"
+    params: {}
+  validation:
+    name: "CrossEntropyLoss"
+    params: {}
+
+optimizer:
+  name: "Adam"
+  params:
+    lr: 0.0001
+
+metrics:
+  - "mIoU"
+
+checkpointing:
+  save_best: true
+  monitor_metric: "val_loss"
+  mode: "min"
+  save_interval: null

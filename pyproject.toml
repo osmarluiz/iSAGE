@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isage"
+version = "1.0.0"
+description = "iSAGE — Iterative Sparse Annotation Guided by Expert: a sparse-annotation platform for semantic segmentation."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Osmar Luiz Ferreira de Carvalho", email = "osmarlfcarvalho@gmail.com" },
+]
+requires-python = ">=3.9"
+keywords = [
+    "active learning",
+    "semantic segmentation",
+    "sparse annotation",
+    "remote sensing",
+    "human-in-the-loop",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/osmarluiz/iSAGE"
+Paper = "https://github.com/osmarluiz/sial-paper"
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["src*", "isage_annotator*", "segmentation_models_pytorch*"]

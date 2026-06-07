@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Editor / OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# Workflow artifacts (users should not commit their runs)
+Sessions/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+logs/
+*.log
+outputs/
+results/
+
+# Crash diagnostics from the annotator
+annotator_crash.log
+
+# Datasets — users bring their own (match dirs, junctions, and symlinks)
+DATASETS
+data
+VAIHINGEN_3
+VAIHINGEN
+BSB_*
+*_dataset
