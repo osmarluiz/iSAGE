@@ -30,20 +30,58 @@ The platform comprises four subsystems, mirroring §3.4 of the paper:
 git clone https://github.com/osmarluiz/iSAGE.git
 cd iSAGE
 pip install -r requirements.txt
+```
+
+iSAGE ships with two drivers — pick the one that fits your workflow. They are
+backed by the same `Workflow` class and share the same session on disk, so you
+can switch between them mid-iteration without migrating anything.
+
+### Driver 1 — Jupyter notebook (interactive)
+
+```bash
 jupyter lab isage_workflow.ipynb
 ```
 
-The notebook walks through the five-cell loop:
+Four short cells: imports, a widget that builds the `Workflow` (dataset
+dropdown + session picker + iteration selector + "Create new dataset…"
+form), an annotate call, and a train call. The widget is one driver of the
+`Workflow` constructor — the notebook does not implement any platform logic.
 
-1. **Setup** — imports, GPU check.
-2. **Configure** — load dataset + training YAMLs.
-3. **Session** — create or resume a session.
-4. **Annotate** — launches the PyQt5 widget; you click on errors; close window when done.
-5. **Train** — runs EWDL retraining, generates predictions, advances to `iteration_{N+1}`.
+### Driver 2 — Terminal (scriptable)
 
-After cell 5, jump back to cell 4 and the loop continues. The next iteration's
-overlay reflects what the model just learned, so each round shows you where to
-click next.
+```bash
+python cli.py \
+    --dataset configs/datasets/vaihingen_1k_v3.yaml \
+    --training configs/training/unet_efficientnet_b7.yaml \
+    --session Sessions/my_run
+```
+
+A small REPL opens:
+
+```
+annotate | train | status | quit > _
+```
+
+Same `Workflow` API as the notebook, no GUI dependency beyond the PyQt5
+annotator window itself.
+
+### Driver 3 — Your own script (programmatic)
+
+```python
+from src.workflow import Workflow
+
+wf = Workflow.from_config(
+    dataset='configs/datasets/my.yaml',
+    training='configs/training/unet_efficientnet_b7.yaml',
+    session='Sessions/my_run',
+)
+wf.annotate()  # opens the PyQt5 annotator
+wf.train()     # trains, generates predictions, advances iter
+```
+
+The session directory (`Sessions/<name>/`) is the contract between drivers —
+JSON annotations and per-iteration directories are the source of truth. Any
+driver picks up where another left off.
 
 ## Use your own dataset
 
@@ -79,16 +117,19 @@ comparison can be made on the same model, schedule, and seed budget.
 
 ```
 .
-├── isage_workflow.ipynb       Single-notebook orchestrator (5 cells)
+├── isage_workflow.ipynb       Driver 1 (Jupyter)
+├── cli.py                     Driver 2 (terminal REPL)
 ├── src/
+│   ├── workflow.py            Workflow class — the API both drivers use
+│   ├── notebook_widgets.py    SessionPicker (UI helpers for the notebook)
 │   ├── annotation/            Launcher + four output-reading baselines
-│   ├── session/               Session management + mask generator
+│   ├── session/               Session management + SessionView + mask generator
 │   ├── training/              EWDL training loop + dataloader
 │   ├── datasets/, losses/, metrics/, utils/
 ├── isage_annotator/           PyQt5 annotation GUI
 ├── segmentation_models_pytorch/   Vendored, modified — contains EWDL
 ├── configs/
-│   ├── datasets/              Per-dataset YAMLs
+│   ├── datasets/              Per-dataset YAMLs (templates)
 │   └── training/              Per-experiment YAMLs
 ├── tools/
 │   └── launch_annotation_tool.py   Standalone annotator launcher
