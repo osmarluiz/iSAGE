@@ -1,0 +1,42 @@
+name: VAIHINGEN_1K
+paths:
+  train_images: VAIHINGEN_2/image_train
+  train_dense_masks: VAIHINGEN_2/mask_train_indexed
+  train_sparse_masks: VAIHINGEN_2/sparse_masks
+  val_images: VAIHINGEN_2/image_val
+  val_masks: VAIHINGEN_2/mask_test_mapped
+  test_images: null
+  test_masks: null
+classes:
+  num_classes: 6
+  ignore_index: 6
+  names:
+  - impervious
+  - building
+  - tree
+  - car
+  - low_veg
+  - clutter
+  colors:
+  - - 255
+    - 255
+    - 255
+  - - 0
+    - 0
+    - 255
+  - - 0
+    - 255
+    - 0
+  - - 255
+    - 255
+    - 0
+  - - 0
+    - 255
+    - 255
+  - - 255
+    - 0
+    - 0
+image:
+  width: 512
+  height: 512
+  channels: 3

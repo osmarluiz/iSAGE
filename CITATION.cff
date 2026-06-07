@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the methods paper and (when available) the Software Impacts companion paper."
+type: software
+title: "iSAGE: Iterative Sparse Annotation Guided by Expert"
+abstract: >-
+  iSAGE is an integrated platform for semantic segmentation that lets a
+  domain expert click on pixels where the current model is confidently
+  wrong. The Error-Weighted Dice Loss amplifies the gradient at those
+  clicks during retraining, and the JSON annotation record itself is the
+  dataset — no propagation, pseudo-labels, or CRF refinement between the
+  click and the gradient.
+authors:
+  - family-names: "Carvalho"
+    given-names: "Osmar Luiz Ferreira de"
+    email: "osmarlfcarvalho@gmail.com"
+    affiliation: "Universidade de Brasília"
+repository-code: "https://github.com/osmarluiz/iSAGE"
+url: "https://github.com/osmarluiz/iSAGE"
+license: MIT
+keywords:
+  - semantic segmentation
+  - active learning
+  - sparse annotation
+  - human-in-the-loop
+  - remote sensing
+  - error-weighted loss
+preferred-citation:
+  type: article
+  title: "iSAGE: Iterative Sparse Annotation Guided by Expert"
+  authors:
+    - family-names: "Carvalho"
+      given-names: "Osmar Luiz Ferreira de"
+  journal: "Expert Systems with Applications"
+  year: 2026
+  notes: "Under review"

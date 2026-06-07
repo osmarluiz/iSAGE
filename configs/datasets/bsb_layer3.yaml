@@ -1,0 +1,38 @@
+name: BSB_LAYER3_BUILDINGS
+paths:
+  train_images: DATASETS/BSB
+  train_dense_masks: null
+  train_sparse_masks: null
+  val_images: null
+  val_masks: null
+  test_images: null
+  test_masks: null
+classes:
+  num_classes: 5
+  ignore_index: 5
+  names:
+  - background
+  - visible_house
+  - nonvisible_house
+  - visible_building
+  - nonvisible_building
+  colors:
+  - - 0
+    - 0
+    - 0
+  - - 255
+    - 0
+    - 255
+  - - 255
+    - 182
+    - 193
+  - - 255
+    - 165
+    - 0
+  - - 255
+    - 218
+    - 185
+image:
+  width: 1024
+  height: 1024
+  channels: 3

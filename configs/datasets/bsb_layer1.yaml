@@ -1,0 +1,38 @@
+name: BSB_LAYER1_VEHICLES
+paths:
+  train_images: DATASETS/BSB
+  train_dense_masks: null
+  train_sparse_masks: null
+  val_images: null
+  val_masks: null
+  test_images: null
+  test_masks: null
+classes:
+  num_classes: 5
+  ignore_index: 5
+  names:
+  - background
+  - visible_car
+  - nonvisible_car
+  - visible_large_car
+  - nonvisible_large_car
+  colors:
+  - - 0
+    - 0
+    - 0
+  - - 255
+    - 0
+    - 0
+  - - 255
+    - 107
+    - 107
+  - - 0
+    - 0
+    - 255
+  - - 107
+    - 107
+    - 255
+image:
+  width: 1024
+  height: 1024
+  channels: 3

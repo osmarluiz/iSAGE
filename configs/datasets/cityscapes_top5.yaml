@@ -1,0 +1,43 @@
+name: CITYSCAPES_TOP5
+description: Cityscapes fine, top-5 class setup (auto-generated), center-cropped 1024x1024
+
+type: semantic_segmentation
+
+paths:
+  train_images: DATASETS/CITYSCAPES_TOP5/image_train
+  train_dense_masks: DATASETS/CITYSCAPES_TOP5/class_train
+  train_sparse_masks: null
+  val_images: DATASETS/CITYSCAPES_TOP5/image_val
+  val_masks: DATASETS/CITYSCAPES_TOP5/class_val
+  test_images: DATASETS/CITYSCAPES_TOP5/image_test
+  test_masks: DATASETS/CITYSCAPES_TOP5/class_test
+
+image:
+  height: 1024
+  width: 1024
+  channels: 3
+  format: png
+
+classes:
+  num_classes: 6
+  ignore_index: 255
+  names:
+    - road
+    - building
+    - vegetation
+    - car
+    - sidewalk
+    - background
+  colors:
+    - [128, 64, 128]
+    - [70, 70, 70]
+    - [107, 142, 35]
+    - [0, 0, 142]
+    - [244, 35, 232]
+    - [0, 0, 0]
+
+augmentation:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: false
+  rotation: 0

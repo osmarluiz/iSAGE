@@ -1,0 +1,46 @@
+# BSB 256x256 Dataset Configuration (multiclass)
+# Source: D:/PROJECTS/SPARSE/MULTICLASS/DENSE — has separate val and test sets
+
+name: BSB_256
+type: semantic_segmentation
+
+paths:
+  train_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_train
+  train_dense_masks: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/class_train
+  train_sparse_masks: null  # provided per-iteration via session_path
+  val_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_val
+  val_masks: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/class_val
+  test_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_test
+  test_masks: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/class_test
+
+image:
+  height: 256
+  width: 256
+  channels: 3
+  format: tiff
+
+normalization:
+  mean: [0.3886, 0.3943, 0.3281]
+  std: [0.2250, 0.1881, 0.1834]
+
+classes:
+  num_classes: 5
+  ignore_index: 5
+  names:
+    - background
+    - car
+    - road
+    - building
+    - permeable_area
+  colors:
+    - [0, 0, 0]
+    - [255, 255, 0]
+    - [128, 128, 128]
+    - [0, 0, 255]
+    - [0, 255, 0]
+
+augmentation:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: true
+  rotation: 0

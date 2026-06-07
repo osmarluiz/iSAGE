@@ -1,0 +1,54 @@
+name: BSB_LAYER0_PERMEABILITY
+paths:
+  train_images: DATASETS/BSB
+  train_dense_masks: null
+  train_sparse_masks: null
+  val_images: null
+  val_masks: null
+  test_images: null
+  test_masks: null
+classes:
+  num_classes: 9
+  ignore_index: 9
+  names:
+  - background
+  - visible_permeable_soil
+  - nonvisible_permeable_soil
+  - visible_asphalt
+  - nonvisible_asphalt
+  - visible_impermeable_soil
+  - nonvisible_impermeable_soil
+  - visible_swimming_pool
+  - nonvisible_swimming_pool
+  colors:
+  - - 0
+    - 0
+    - 0
+  - - 139
+    - 69
+    - 19
+  - - 210
+    - 105
+    - 30
+  - - 64
+    - 64
+    - 64
+  - - 128
+    - 128
+    - 128
+  - - 255
+    - 215
+    - 0
+  - - 255
+    - 236
+    - 139
+  - - 0
+    - 191
+    - 255
+  - - 135
+    - 206
+    - 235
+image:
+  width: 1024
+  height: 1024
+  channels: 3

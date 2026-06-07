@@ -1,30 +1,30 @@
-# iSAGE — Iterative Sparse Annotation Guided by Expert
+# iSAGE
 
-iSAGE is a sparse-annotation platform for semantic segmentation. The annotator
-sees the current model's predictions overlaid on the image and clicks on pixels
-where the model is confidently wrong. The Error-Weighted Dice Loss (EWDL)
-amplifies the gradient at those clicks during retraining, and an integrated
-platform hosts inspection, annotation, retraining, and dataset maintenance as a
-single continuous workflow. No pseudo-labels, no propagation, no consistency
-regularization — each annotated pixel is exactly the supervision that reaches
-the loss.
+**Iterative Sparse Annotation Guided by Expert** — train semantic segmentation
+models from a handful of expert clicks per image. No pseudo-labels, no
+propagation, no consistency machinery between the click and the gradient.
 
-This repository releases the full platform that produced every experiment in
-the paper. It is designed for re-use: any image dataset with enumerable
-classes can be plugged in.
+<p align="center">
+  <img src="docs/images/annotator_ui.png" alt="iSAGE annotator showing the prediction overlay on a BsB Aerial patch" width="900"/>
+  <br/>
+  <em>The iSAGE annotator: prediction overlay, per-class clicks, minimap, point counts.</em>
+</p>
 
-## What's inside
-
-The platform comprises four subsystems, mirroring §3.4 of the paper:
+The platform packages four subsystems described in
+[Carvalho et al. 2026](#citing) (§3.4 of the paper):
 
 | Subsystem | What it does | Where it lives |
 |---|---|---|
-| **Annotation interface** | PyQt5 widget showing image + prediction overlay; left-click adds a point, right-click removes | `isage_annotator/` |
-| **Record storage** | One JSON file per image stores the full annotation history (coordinate, class) — auditable, diffable, portable | `Sessions/<name>/iteration_N/annotations/` (created at runtime) |
-| **Session layout** | Each iteration is packaged as `iteration_N/{annotations,masks,models,predictions}/` so any past state can be reloaded or compared | `src/session/` |
-| **Training backend** | Sparse dataloader (treats unlabeled pixels as ignore_index), EWDL, retraining loop, prediction generation | `src/training/` + `segmentation_models_pytorch/` (modified) |
+| Annotation interface | PyQt5 widget showing the image + prediction overlay; left-click adds a point, right-click removes | `isage_annotator/` |
+| Record storage | One JSON file per image — auditable, diffable, portable | `Sessions/<name>/iteration_N/annotations/` |
+| Session layout | Each iteration is `iteration_N/{annotations,masks,models,predictions}/`; any past state can be reloaded | `src/session/` |
+| Training backend | Sparse dataloader (ignore-index for unlabeled pixels) + Error-Weighted Dice Loss + iterative retrain | `src/training/` + vendored `segmentation_models_pytorch/` |
 
 ## Quickstart
+
+iSAGE ships with **two drivers** and a programmatic API. Pick the one that
+fits your workflow — they share the same session on disk, so you can switch
+mid-iteration.
 
 ```bash
 git clone https://github.com/osmarluiz/iSAGE.git
@@ -32,11 +32,7 @@ cd iSAGE
 pip install -r requirements.txt
 ```
 
-iSAGE ships with two drivers — pick the one that fits your workflow. They are
-backed by the same `Workflow` class and share the same session on disk, so you
-can switch between them mid-iteration without migrating anything.
-
-### Driver 1 — Jupyter notebook (interactive)
+### Jupyter (interactive)
 
 ```bash
 jupyter lab isage_workflow.ipynb
@@ -44,15 +40,12 @@ jupyter lab isage_workflow.ipynb
 
 Four short cells: imports, a widget that builds the `Workflow` (dataset
 dropdown + session picker + iteration selector + "Create new dataset…"
-form), an annotate call, and a train call. The widget is one driver of the
-`Workflow` constructor — the notebook does not implement any platform logic.
+form), then annotate and train.
 
-### Driver 2 — Terminal (scriptable)
-
-Four subcommands, each scoped to what it needs:
+### Terminal (scriptable)
 
 ```bash
-# Fast status — no model load (~0.5s)
+# Fast status (no model load, ~0.5s)
 python cli.py status --session Sessions/my_run
 
 # One-shot annotate (load model, open GUI, return)
@@ -60,24 +53,14 @@ python cli.py annotate --dataset configs/datasets/X.yaml \
                       --training configs/training/Y.yaml \
                       --session Sessions/my_run
 
-# One-shot train (load model, train, advance iter)
+# One-shot train
 python cli.py train --dataset ... --training ... --session ...
 
 # Interactive REPL (load model once, multiple commands)
 python cli.py repl --dataset ... --training ... --session ...
 ```
 
-The REPL prompt shows the current iteration target and accepts the four
-commands plus `use <N>` to switch iter:
-
-```
-[iter=latest] annotate | train | status | use <N> | quit > _
-```
-
-`status` is the only subcommand that doesn't load the model — useful for
-scripting and quick checks.
-
-### Driver 3 — Your own script (programmatic)
+### Library (programmatic)
 
 ```python
 from src.workflow import Workflow
@@ -88,74 +71,108 @@ wf = Workflow.from_config(
     session='Sessions/my_run',
 )
 wf.annotate()  # opens the PyQt5 annotator
-wf.train()     # trains, generates predictions, advances iter
+wf.train()     # trains, generates predictions, advances the iteration
 ```
 
-The session directory (`Sessions/<name>/`) is the contract between drivers —
-JSON annotations and per-iteration directories are the source of truth. Any
-driver picks up where another left off.
+### Try the included example
 
-## Use your own dataset
+A 30-patch toy example from the BsB Aerial dataset (5 MB, all 5 classes
+represented in every patch) runs the full loop in **about 3 minutes** on a
+single GPU:
 
-Two files define a dataset:
+```bash
+python cli.py train \
+    --dataset examples/bsb_toy/dataset.yaml \
+    --training examples/bsb_toy/training.yaml \
+    --session Sessions/bsb_toy_run \
+    --iteration 0
+```
 
-- A YAML in `configs/datasets/` listing image paths, class names, colors, and `ignore_index`.
-- A training YAML in `configs/training/` listing architecture, encoder, loss, and hyperparameters.
+See [`examples/bsb_toy/README.md`](examples/bsb_toy/README.md) for the full
+walkthrough.
 
-`configs/datasets/vaihingen_1k_v3.yaml` and `configs/training/unet_efficientnet_b7.yaml`
-are the canonical examples. Copy them, edit the paths and class definitions,
-point the notebook at the new YAML names, and run.
+## How it works
 
-The platform is domain-agnostic by construction. Any image format that PIL
-reads (PNG, JPG, TIFF, multi-band TIFF) and any class taxonomy that fits an
-integer-indexed `(num_classes + 1)` scheme works.
+<p align="center">
+  <img src="docs/images/workflow.png" alt="iSAGE iterative workflow" width="800"/>
+  <br/>
+  <em>Each iteration: human inspects the prediction overlay, clicks on confident errors, re-trains with EWDL, repeat until quality threshold.</em>
+</p>
 
-See `docs/bring-your-own-data.md` for a step-by-step walkthrough.
+The platform's central thesis: the supervision signal you want comes from
+pixels where the model is **confidently wrong**. Acquisition functions over
+model outputs (entropy, margin, uncertainty) can't surface those — confident
+errors register as confidence by definition. Only a human looking at the
+image can. iSAGE's contribution is the workflow that makes this signal
+deliverable end-to-end at research scale, plus the Error-Weighted Dice Loss
+that amplifies the gradient at every annotated error during training.
+
+## Results
+
+On ISPRS Vaihingen (five classes, 0.011% labeled pixels), iSAGE matches the
+fully-supervised baseline trained on dense GT under the same protocol while
+the strongest output-reading baselines (oracle entropy and self-training
+pseudo-labeling) plateau well below dense.
+
+<p align="center">
+  <img src="docs/images/results_vaihingen.png" alt="iSAGE vs baselines on ISPRS Vaihingen" width="700"/>
+  <br/>
+  <em>mIoU progression on ISPRS Vaihingen. iSAGE: 76.78% at iter 5 (matches fully-supervised 76.65%). Oracle entropy and pseudo-labeling plateau ~8–10 points below.</em>
+</p>
+
+Full numbers across both datasets (BsB Aerial multiclass, Vaihingen 5-class,
+cross-architecture validation, λ ablation, loss ablation) are in Tables 1–5
+of the paper.
 
 ## What this platform does NOT do
 
-- It does **not** generate pseudo-labels from model predictions.
-- It does **not** propagate clicks through CRFs, superpixels, or any spatial heuristic.
-- It does **not** use foundation models (SAM, CLIPSeg) to densify supervision.
-- It does **not** require a labeled validation set during training.
+These omissions are deliberate — they are the experimental thesis of the
+paper. Reintroducing them defeats the point.
 
-These omissions are deliberate — they are the experimental thesis of the paper.
-Reintroducing them defeats the point. The four falsification baselines in
-`src/annotation/` (entropy oracle, pseudo-labeling, CRF propagation, uniform
-random) re-run the iSAGE protocol with each of these mechanisms in place so the
-comparison can be made on the same model, schedule, and seed budget.
+- No pseudo-labels from model predictions.
+- No propagation through CRFs, superpixels, or any spatial heuristic.
+- No foundation-model labeling (SAM, CLIPSeg).
+- No labeled validation set required (training works without it; see
+  `docs/bring-your-own-data.md`).
+
+The four output-reading baselines in `src/annotation/` (entropy oracle,
+pseudo-labeling, CRF propagation, uniform random) re-run iSAGE's protocol
+with each of these mechanisms in place so the comparison can be made on the
+same model, schedule, and seed budget.
 
 ## Repository layout
 
 ```
 .
-├── isage_workflow.ipynb       Driver 1 (Jupyter)
-├── cli.py                     Driver 2 (terminal REPL)
+├── isage_workflow.ipynb       Notebook driver (interactive widget)
+├── cli.py                     Terminal driver (REPL + one-shot subcommands)
 ├── src/
 │   ├── workflow.py            Workflow class — the API both drivers use
-│   ├── notebook_widgets.py    SessionPicker (UI helpers for the notebook)
+│   ├── notebook_widgets.py    SessionPicker, dataset-creation form
 │   ├── annotation/            Launcher + four output-reading baselines
 │   ├── session/               Session management + SessionView + mask generator
-│   ├── training/              EWDL training loop + dataloader
+│   ├── training/              EWDL training loop + dataloader (val-optional)
 │   ├── datasets/, losses/, metrics/, utils/
 ├── isage_annotator/           PyQt5 annotation GUI
 ├── segmentation_models_pytorch/   Vendored, modified — contains EWDL
 ├── configs/
-│   ├── datasets/              Per-dataset YAMLs (templates)
-│   └── training/              Per-experiment YAMLs
-├── tools/
-│   └── launch_annotation_tool.py   Standalone annotator launcher
-└── docs/                      json-record-spec, BYOD, EWDL, smp diff
+│   ├── datasets/              Per-dataset YAMLs
+│   └── training/              Per-experiment YAMLs (paper recipes)
+├── examples/bsb_toy/          30-patch BsB subset for quick reproducibility
+├── tests/                     Smoke tests (pytest)
+├── tools/                     Standalone annotator launcher
+└── docs/                      JSON record spec, BYOD guide, EWDL math, smp diff, figures
 ```
 
 ## Hardware
 
-- Annotation: any machine with a display (Linux/Mac/Windows; WSL works with X server).
-- Training: GPU strongly recommended. Paper experiments used a single NVIDIA RTX 4090; smaller models (U-Net + EfficientNet-B0) train on 8 GB VRAM.
+- **Annotation:** any machine with a display (Linux/Mac/Windows; WSL works with X server). PyQt5 + Python 3.9+.
+- **Training:** GPU strongly recommended. Paper experiments used a single NVIDIA RTX 4090 with U-Net + EfficientNet-B7. The toy example runs on 4 GB VRAM with B0.
 
 ## Citing
 
-If you use iSAGE in academic work, please cite:
+If you use iSAGE in academic work, please cite both the platform release and
+the methods paper:
 
 ```bibtex
 @article{carvalho2026isage,
@@ -167,15 +184,21 @@ If you use iSAGE in academic work, please cite:
 }
 ```
 
-A camera-ready BibTeX entry will replace the placeholder when the paper
-appears. The associated paper repository (LaTeX source, figures, raw data
-analysis scripts) is at <https://github.com/osmarluiz/sial-paper>.
+A companion **Software Impacts** paper describing this codebase as a research
+instrument is planned.
+
+The associated paper repository (LaTeX source, figures, raw data analysis
+scripts) is at <https://github.com/osmarluiz/sial-paper>.
 
 ## License
 
 MIT — see `LICENSE`.
 
-The vendored `segmentation_models_pytorch/` directory is a fork of the
-upstream library [qubvel/segmentation_models.pytorch](https://github.com/qubvel/segmentation_models.pytorch)
+The vendored `segmentation_models_pytorch/` directory is a fork of
+[qubvel/segmentation_models.pytorch](https://github.com/qubvel/segmentation_models.pytorch)
 (also MIT-licensed) with added loss functions, including EWDL. See
-`docs/smp-modifications.md` for the diff against upstream.
+[`docs/smp-modifications.md`](docs/smp-modifications.md) for the diff.
+
+The toy example under `examples/bsb_toy/` is a subset of the BsB Aerial
+dataset from Carvalho et al. (2022) redistributed under the same MIT terms
+as the platform itself.

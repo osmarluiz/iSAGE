@@ -1,0 +1,30 @@
+name: BSB_LAYER2_VEGETATION
+paths:
+  train_images: DATASETS/BSB
+  train_dense_masks: null
+  train_sparse_masks: null
+  val_images: null
+  val_masks: null
+  test_images: null
+  test_masks: null
+classes:
+  num_classes: 3
+  ignore_index: 3
+  names:
+  - background
+  - shadow
+  - tree
+  colors:
+  - - 0
+    - 0
+    - 0
+  - - 64
+    - 64
+    - 64
+  - - 0
+    - 255
+    - 0
+image:
+  width: 1024
+  height: 1024
+  channels: 3

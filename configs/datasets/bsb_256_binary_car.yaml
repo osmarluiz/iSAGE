@@ -1,0 +1,38 @@
+name: BSB_256_BINARY_CAR
+type: semantic_segmentation
+paths:
+  train_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_train
+  train_dense_masks: DATASETS/BSB_256_BINARY/car/class_train
+  train_sparse_masks: null
+  val_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_val
+  val_masks: DATASETS/BSB_256_BINARY/car/class_val
+  test_images: D:/PROJECTS/SPARSE/MULTICLASS/DENSE/image_test
+  test_masks: DATASETS/BSB_256_BINARY/car/class_test
+image:
+  height: 256
+  width: 256
+  channels: 3
+  format: tiff
+normalization:
+  mean:
+  - 0.3886
+  - 0.3943
+  - 0.3281
+  std:
+  - 0.225
+  - 0.1881
+  - 0.1834
+classes:
+  num_classes: 1
+  ignore_index: 2
+  names:
+  - car
+  colors:
+  - - 255
+    - 255
+    - 255
+augmentation:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: true
+  rotation: 0

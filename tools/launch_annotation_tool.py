@@ -19,6 +19,14 @@ import os
 import traceback
 from pathlib import Path
 
+# Force UTF-8 stdout/stderr so checkmark prints don't crash on Windows
+# consoles using cp1252. No-op when streams already speak utf-8.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
 # Crash/exit diagnostics. Mirror to a file because stderr is not captured
 # by the .bat launcher.
 _crash_log = open(

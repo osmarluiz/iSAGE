@@ -49,6 +49,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Force UTF-8 stdout/stderr so checkmark prints from src.* don't crash on
+# Windows consoles using cp1252. Jupyter already runs utf-8 so the notebook
+# driver is unaffected.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
 # Add project root to path so 'from src.X import Y' resolves
 sys.path.insert(0, str(Path(__file__).parent))
 

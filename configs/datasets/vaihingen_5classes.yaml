@@ -1,0 +1,35 @@
+name: VAIHINGEN_5CLASSES
+description: Vaihingen dataset without clutter class (5 classes only)
+
+paths:
+  train_images: archive/VAIHINGEN_3/image_train  # 1000 images (same as vaihingen_1k_v3)
+  train_dense_masks: archive/VAIHINGEN_3/mask_train_indexed
+  train_sparse_masks: archive/VAIHINGEN_3/sparse_masks
+  val_images: archive/VAIHINGEN_3/image_val
+  val_masks: archive/VAIHINGEN_3/mask_test_mapped
+  test_images: null
+  test_masks: null
+
+classes:
+  num_classes: 5
+  ignore_index: 5  # Clutter pixels in val will be ignored
+  names:
+    - impervious
+    - building
+    - tree
+    - car
+    - low_veg
+  colors:
+    - [255, 255, 255]  # impervious - white
+    - [0, 0, 255]      # building - blue
+    - [0, 255, 0]      # tree - green
+    - [255, 255, 0]    # car - yellow
+    - [0, 255, 255]    # low_veg - cyan
+
+image:
+  width: 512
+  height: 512
+  channels: 3
+
+# Note: Original clutter class (5) is now ignore_index
+# Pixels labeled as clutter in validation masks will be ignored during evaluation

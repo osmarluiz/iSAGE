@@ -1,0 +1,27 @@
+name: "VAIHINGEN"
+
+paths:
+  train_images: "VAIHINGEN/image_train"
+  train_dense_masks: "VAIHINGEN/mask_train_indexed"
+  train_sparse_masks: "VAIHINGEN/sparse_masks"
+  val_images: "VAIHINGEN/image_val"
+  val_masks: "VAIHINGEN/mask_test_mapped"
+  test_images: null
+  test_masks: null
+
+classes:
+  num_classes: 6
+  ignore_index: 6
+  names: ["impervious", "building", "tree", "car", "low_veg", "clutter"]
+  colors:
+    - [255, 255, 255]  # impervious - white
+    - [0, 0, 255]      # building - blue
+    - [0, 255, 0]      # tree - green
+    - [255, 255, 0]    # car - yellow
+    - [0, 255, 255]    # low_veg - cyan
+    - [255, 0, 0]      # clutter - red
+
+image:
+  width: 512
+  height: 512
+  channels: 3
