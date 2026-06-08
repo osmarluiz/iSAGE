@@ -19,9 +19,9 @@ All notable changes to iSAGE are documented here. The format follows
 
 ## [1.0.0] — 2026-06-06
 
-Initial public release accompanying the Expert Systems with Applications
-submission of *iSAGE: Iterative Sparse Annotation Guided by Expert*
-(Carvalho et al., under review).
+Initial public release accompanying the arXiv preprint of
+*iSAGE: Iterative Sparse Annotation Guided by Expert*
+(Carvalho et al., 2026).
 
 ### Added
 - `src/workflow.py` — `Workflow` class, the single API every driver uses.

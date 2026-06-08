@@ -222,12 +222,13 @@ If you use iSAGE in academic work, please cite both the platform release and
 the methods paper:
 
 ```bibtex
-@article{carvalho2026isage,
-  title   = {iSAGE: Iterative Sparse Annotation Guided by Expert},
-  author  = {Carvalho, Osmar Luiz Ferreira de and others},
-  journal = {Expert Systems with Applications},
-  year    = {2026},
-  note    = {Under review}
+@misc{carvalho2026isage,
+  title         = {iSAGE: Iterative Sparse Annotation Guided by Expert},
+  author        = {Carvalho, Osmar Luiz Ferreira de and others},
+  year          = {2026},
+  eprint        = {XXXX.XXXXX},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
 }
 ```
 
