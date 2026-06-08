@@ -148,6 +148,8 @@ class SessionPicker:
         self._new_train = W.Text(placeholder="/path/to/images", description="Train images dir:", layout=wide, style=style)
         self._new_val = W.Text(placeholder="(optional)", description="Val images dir:", layout=wide, style=style)
         self._new_valm = W.Text(placeholder="(optional)", description="Val masks dir:", layout=wide, style=style)
+        self._new_test = W.Text(placeholder="(optional)", description="Test images dir:", layout=wide, style=style)
+        self._new_testm = W.Text(placeholder="(optional)", description="Test masks dir:", layout=wide, style=style)
         self._new_classes = W.Textarea(
             placeholder="road\nbuilding\nvegetation",
             description="Class names:",
@@ -164,7 +166,9 @@ class SessionPicker:
         self._new_btn.on_click(self._on_create_dataset)
 
         form = W.VBox([
-            self._new_name, self._new_train, self._new_val, self._new_valm,
+            self._new_name, self._new_train,
+            self._new_val, self._new_valm,
+            self._new_test, self._new_testm,
             self._new_classes, self._new_btn, self._new_status,
         ])
         accordion = W.Accordion(children=[form])
@@ -229,6 +233,8 @@ class SessionPicker:
         train_p = self._new_train.value.strip()
         val_p = self._new_val.value.strip() or None
         valm_p = self._new_valm.value.strip() or None
+        test_p = self._new_test.value.strip() or None
+        testm_p = self._new_testm.value.strip() or None
         class_list = [c.strip() for c in self._new_classes.value.split("\n") if c.strip()]
 
         if not name or not train_p or not class_list:
@@ -267,11 +273,14 @@ class SessionPicker:
             "paths": {
                 "train_images": str(train_dir),
                 "train_dense_masks": None,
-                "train_sparse_masks": str(Path("Sessions") / name / "sparse_masks"),
+                # null means "start from scratch": iteration_0 is created with
+                # empty annotations and empty masks, the annotator opens on a
+                # blank canvas, and the user clicks the seed points directly.
+                "train_sparse_masks": None,
                 "val_images": val_p,
                 "val_masks": valm_p,
-                "test_images": None,
-                "test_masks": None,
+                "test_images": test_p,
+                "test_masks": testm_p,
             },
             "classes": {
                 "num_classes": num_classes,
@@ -291,7 +300,12 @@ class SessionPicker:
         with open(yaml_path, "w") as f:
             yaml.safe_dump(yaml_obj, f, default_flow_style=False, sort_keys=False)
 
-        val_note = "" if val_p else " (no validation — that is fine)"
+        notes = []
+        if not val_p:
+            notes.append("no validation")
+        if not test_p:
+            notes.append("no test set")
+        val_note = f" ({', '.join(notes)} — that is fine)" if notes else ""
         self._new_status.value = (
             f'<span style="color:#2a7"><b>Created {yaml_path.name}</b> — '
             f'{len(samples)} images, {width}×{height}×{channels}{val_note}</span>'
