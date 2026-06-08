@@ -74,6 +74,25 @@ wf.annotate()  # opens the PyQt5 annotator
 wf.train()     # trains, generates predictions, advances the iteration
 ```
 
+### Bring your own trainer
+
+The training backend is pluggable. The default is `SmpTrainer` (U-Net family from `segmentation_models.pytorch` plus EWDL), which is the one the methods paper uses. You can substitute it with your own (PyTorch Lightning, monai, fastai, MMSegmentation, raw PyTorch, anything) by implementing the one-method `Trainer` protocol and passing it to `Workflow`:
+
+```python
+from examples.byot.example_trainer import TinyTorchTrainer
+
+wf = Workflow.from_config(
+    dataset='configs/datasets/my.yaml',
+    training='configs/training/unet_efficientnet_b7.yaml',
+    session='Sessions/byot_run',
+    trainer=TinyTorchTrainer(num_epochs=5),  # plug your own here
+)
+wf.annotate()  # annotator unchanged
+wf.train()     # delegates to your trainer
+```
+
+The annotator, the JSON record format, and the session directory layout stay the same; only the training step changes. See [`docs/bring-your-own-trainer.md`](docs/bring-your-own-trainer.md) for the contract and [`examples/byot/`](examples/byot/) for a working example.
+
 ### Try the included example
 
 A 30-patch toy example from the BsB Aerial dataset (5 MB, all 5 classes

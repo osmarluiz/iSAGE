@@ -1,8 +1,8 @@
 """High-level driver API for an iSAGE session.
 
 The annotate-train loop in iSAGE is just three platform calls glued together:
-load the configs, set up the model, and alternate between
-``run_annotation_workflow`` and ``run_training_iteration``. ``Workflow``
+load the configs, set up the trainer, and alternate between
+``run_annotation_workflow`` and ``trainer.train_one_iteration``. ``Workflow``
 bundles that into one object so any driver — a Jupyter widget, a CLI script,
 a Streamlit app, an HTTP service — uses the same minimal surface:
 
@@ -14,8 +14,10 @@ a Streamlit app, an HTTP service — uses the same minimal surface:
     >>> wf.annotate()    # launches the PyQt5 annotator on the latest iter
     >>> wf.train()       # trains, generates predictions, advances iter
 
-The notebook is one driver and not the API. Replacing the notebook with the
-CLI script ``examples/cli_driver.py`` is a faithful equivalent.
+The training backend is pluggable. The default is :class:`SmpTrainer` (U-Net
+family from ``segmentation_models.pytorch`` plus EWDL). Pass
+``trainer=YourTrainer()`` to swap it for your own implementation — see
+``docs/bring-your-own-trainer.md``.
 """
 
 from __future__ import annotations
@@ -29,8 +31,7 @@ import pandas as pd
 from src.annotation.launcher import run_annotation_workflow
 from src.session.manager import get_or_create_session
 from src.session.session_view import SessionView
-from src.training.setup import setup_training
-from src.training.workflow import run_training_iteration
+from src.training.trainer_protocol import Trainer
 from src.utils.config_loader import load_dataset_config, load_training_config
 
 
@@ -40,10 +41,15 @@ IterationSpec = Union[int, str]  # int (specific iter) or 'latest'
 class Workflow:
     """One iSAGE session ready to annotate or train.
 
-    Holds the model, optimizer, losses, dataset config, training config, and
-    session path. The methods just dispatch to the underlying platform
-    functions, so this class is thin by design — no behaviour the lower layers
-    don't already implement.
+    Holds the dataset config, training config, session path, and a Trainer
+    instance. The methods dispatch to the underlying platform functions, so
+    this class is thin by design — no behaviour the lower layers don't
+    already implement.
+
+    The trainer is pluggable. If not provided, the default
+    :class:`SmpTrainer` is constructed (U-Net family from
+    ``segmentation_models.pytorch`` plus the Error-Weighted Dice Loss).
+    Pass any object implementing the :class:`Trainer` protocol to swap.
     """
 
     def __init__(
@@ -53,23 +59,24 @@ class Workflow:
         training_config: dict,
         session_path: Union[Path, str],
         iteration: IterationSpec = "latest",
+        trainer: Optional[Trainer] = None,
     ):
         self.dataset_config = dataset_config
         self.training_config = training_config
         self.session_path = Path(session_path)
         self.iteration: IterationSpec = iteration
 
-        (
-            self.model,
-            self.device,
-            self.train_loss,
-            self.val_loss,
-            self.metrics,
-            self.optimizer,
-        ) = setup_training(
-            dataset_config=self.dataset_config,
-            training_config=self.training_config,
-        )
+        if trainer is None:
+            # Default trainer: U-Net + EWDL via segmentation_models.pytorch.
+            # Lazy-imported so users who plug in their own trainer don't pay
+            # the smp import cost.
+            from src.training.smp_trainer import SmpTrainer
+            trainer = SmpTrainer(
+                dataset_config=self.dataset_config,
+                training_config=self.training_config,
+            )
+        self.trainer: Trainer = trainer
+
         get_or_create_session(
             session_path=self.session_path,
             dataset_config=self.dataset_config,
@@ -85,13 +92,21 @@ class Workflow:
         training: Union[Path, str],
         session: Union[Path, str],
         iteration: IterationSpec = "latest",
+        trainer: Optional[Trainer] = None,
     ) -> "Workflow":
-        """Build a Workflow from YAML paths and a session directory."""
+        """Build a Workflow from YAML paths and a session directory.
+
+        Pass ``trainer`` to override the default :class:`SmpTrainer`. The
+        custom trainer must implement the :class:`Trainer` protocol (one
+        method: ``train_one_iteration``). See
+        ``docs/bring-your-own-trainer.md`` for the contract.
+        """
         return cls(
             dataset_config=load_dataset_config(str(dataset)),
             training_config=load_training_config(str(training)),
             session_path=session,
             iteration=iteration,
+            trainer=trainer,
         )
 
     # ---- State -------------------------------------------------------------
@@ -117,17 +132,15 @@ class Workflow:
         )
 
     def train(self, visualize: bool = False):
-        """Train on ``self.iteration``, generate predictions, advance to next iter."""
-        return run_training_iteration(
+        """Train on ``self.iteration``, generate predictions, advance to next iter.
+
+        Delegates to ``self.trainer.train_one_iteration``. The default trainer
+        is :class:`SmpTrainer`; any object implementing the
+        :class:`Trainer` protocol can be substituted at construction time.
+        """
+        return self.trainer.train_one_iteration(
             session_path=self.session_path,
             dataset_config=self.dataset_config,
-            training_config=self.training_config,
-            model=self.model,
-            device=self.device,
-            train_loss=self.train_loss,
-            val_loss=self.val_loss,
-            metrics=self.metrics,
-            optimizer=self.optimizer,
             iteration=self.iteration,
             visualize=visualize,
         )
@@ -172,7 +185,8 @@ class Workflow:
         return (
             f"Workflow(session={self.name!r}, "
             f"iteration={self.iteration!r}, "
-            f"dataset={self.dataset_config['name']!r})"
+            f"dataset={self.dataset_config['name']!r}, "
+            f"trainer={type(self.trainer).__name__})"
         )
 
 

@@ -1,10 +1,11 @@
 """Workflow API tests.
 
 These tests exercise the public Workflow API but stop short of running the
-GUI annotator or a real training loop — the goal is to verify construction,
-configuration handling, and dispatch, not to retrain the paper. Slow paths
-(annotate, train) are covered by separate integration tests gated behind
-``--run-integration``.
+GUI annotator or a real training loop -- the goal is to verify
+construction, configuration handling, and dispatch, not to retrain the
+paper. The default trainer (SmpTrainer) needs torch + smp, so most tests
+inject a stub trainer to keep them fast and hermetic. The pluggability is
+itself an assertion of the new architecture.
 """
 
 from __future__ import annotations
@@ -15,30 +16,27 @@ from pathlib import Path
 import pytest
 
 
-def _patch_setup_training_to_skip_torch(monkeypatch):
-    """Avoid pulling torch + smp + GPU init during fast tests.
+class StubTrainer:
+    """Minimal Trainer protocol implementation for tests.
 
-    Workflow's __init__ calls setup_training to build the model. For
-    introspection-level tests we don't need a real model — we just need the
-    method to return enough values to satisfy the constructor.
+    Does not touch torch, smp, or any GPU. Records the iteration it was
+    asked to train so tests can assert on dispatch.
     """
-    fake_returns = (object(), "cpu", object(), object(), [object()], object())
 
-    def fake_setup_training(*, dataset_config, training_config):
-        return fake_returns
+    def __init__(self):
+        self.train_calls = []
 
-    monkeypatch.setattr("src.workflow.setup_training", fake_setup_training)
-    return fake_returns
+    def train_one_iteration(self, *, session_path, dataset_config, iteration, visualize=False):
+        self.train_calls.append({
+            "session_path": session_path,
+            "iteration": iteration,
+            "visualize": visualize,
+        })
+        return {"iteration": iteration, "success": True, "message": "stub"}
 
 
-def test_workflow_construction(tmp_path, tiny_dataset, monkeypatch):
-    """Workflow.from_config builds and exposes the basic attributes."""
-    _patch_setup_training_to_skip_torch(monkeypatch)
-
-    session_path = tmp_path / "ws"
-    # Use a placeholder training YAML that just needs to load
-    training_yaml = tmp_path / "training.yaml"
-    training_yaml.write_text(
+def _minimal_training_yaml(path):
+    path.write_text(
         "name: stub\n"
         "model:\n  architecture: Unet\n  encoder: efficientnet-b0\n  encoder_weights: imagenet\n  activation: softmax\n  in_channels: 3\n"
         "training:\n  learning_rate: 0.0001\n  batch_size: {train: 2, val: 2}\n  num_epochs: 1\n  device: cpu\n  num_workers: 0\n"
@@ -47,40 +45,37 @@ def test_workflow_construction(tmp_path, tiny_dataset, monkeypatch):
         "metrics: [mIoU]\n"
         "checkpointing: {save_best: true, monitor_metric: val_loss, mode: min, save_interval: null}\n"
     )
+    return path
+
+
+def test_workflow_construction(tmp_path, tiny_dataset):
+    """Workflow.from_config builds and exposes the basic attributes when given
+    a stub trainer, bypassing the default smp-backed trainer's heavy imports.
+    """
+    training_yaml = _minimal_training_yaml(tmp_path / "training.yaml")
 
     from src.workflow import Workflow
 
     wf = Workflow.from_config(
         dataset=tiny_dataset["yaml_path"],
         training=training_yaml,
-        session=session_path,
+        session=tmp_path / "ws",
         iteration="latest",
+        trainer=StubTrainer(),
     )
 
-    assert wf.session_path == session_path
+    assert wf.session_path == tmp_path / "ws"
     assert wf.iteration == "latest"
     assert wf.dataset_config["name"] == "TINY"
     assert wf.training_config["name"] == "stub"
     assert wf.name == "ws"
-    # Session directory got created
-    assert session_path.exists()
-    # And contains iteration_0 with the standard subdirs
-    assert (session_path / "iteration_0" / "annotations").exists()
+    assert (tmp_path / "ws").exists()
+    assert (tmp_path / "ws" / "iteration_0" / "annotations").exists()
 
 
-def test_workflow_view_returns_session_view(tmp_path, tiny_dataset, monkeypatch):
+def test_workflow_view_returns_session_view(tmp_path, tiny_dataset):
     """Workflow.view returns a SessionView reflecting current disk state."""
-    _patch_setup_training_to_skip_torch(monkeypatch)
-
-    training_yaml = tmp_path / "training.yaml"
-    training_yaml.write_text(
-        "name: stub\nmodel:\n  architecture: Unet\n  encoder: efficientnet-b0\n  encoder_weights: imagenet\n  activation: softmax\n  in_channels: 3\n"
-        "training:\n  learning_rate: 0.0001\n  batch_size: {train: 2, val: 2}\n  num_epochs: 1\n  device: cpu\n  num_workers: 0\n"
-        "loss:\n  train: {name: EWDLMulticlass, params: {eps: 1.0, wrong_penalty: 5.0, activation: null}}\n  validation: {name: CrossEntropyLoss, params: {}}\n"
-        "optimizer: {name: Adam, params: {lr: 0.0001}}\n"
-        "metrics: [mIoU]\n"
-        "checkpointing: {save_best: true, monitor_metric: val_loss, mode: min, save_interval: null}\n"
-    )
+    training_yaml = _minimal_training_yaml(tmp_path / "training.yaml")
 
     from src.session.session_view import SessionView
     from src.workflow import Workflow
@@ -89,23 +84,16 @@ def test_workflow_view_returns_session_view(tmp_path, tiny_dataset, monkeypatch)
         dataset=tiny_dataset["yaml_path"],
         training=training_yaml,
         session=tmp_path / "ws2",
+        trainer=StubTrainer(),
     )
     assert isinstance(wf.view, SessionView)
     assert wf.view.exists is True
 
 
-def test_workflow_repr(tmp_path, tiny_dataset, monkeypatch):
-    """repr() is informative — includes session name, iteration, dataset."""
-    _patch_setup_training_to_skip_torch(monkeypatch)
-    training_yaml = tmp_path / "training.yaml"
-    training_yaml.write_text(
-        "name: stub\nmodel:\n  architecture: Unet\n  encoder: efficientnet-b0\n  encoder_weights: imagenet\n  activation: softmax\n  in_channels: 3\n"
-        "training:\n  learning_rate: 0.0001\n  batch_size: {train: 2, val: 2}\n  num_epochs: 1\n  device: cpu\n  num_workers: 0\n"
-        "loss:\n  train: {name: EWDLMulticlass, params: {eps: 1.0, wrong_penalty: 5.0, activation: null}}\n  validation: {name: CrossEntropyLoss, params: {}}\n"
-        "optimizer: {name: Adam, params: {lr: 0.0001}}\n"
-        "metrics: [mIoU]\n"
-        "checkpointing: {save_best: true, monitor_metric: val_loss, mode: min, save_interval: null}\n"
-    )
+def test_workflow_repr(tmp_path, tiny_dataset):
+    """repr() is informative -- includes session name, iteration, dataset,
+    and the trainer class name (proves the pluggability is surfaced)."""
+    training_yaml = _minimal_training_yaml(tmp_path / "training.yaml")
 
     from src.workflow import Workflow
 
@@ -113,15 +101,42 @@ def test_workflow_repr(tmp_path, tiny_dataset, monkeypatch):
         dataset=tiny_dataset["yaml_path"],
         training=training_yaml,
         session=tmp_path / "ws3",
+        trainer=StubTrainer(),
     )
     r = repr(wf)
     assert "ws3" in r
     assert "TINY" in r
     assert "latest" in r
+    assert "StubTrainer" in r
+
+
+def test_workflow_train_dispatches_to_trainer(tmp_path, tiny_dataset):
+    """Workflow.train() delegates to trainer.train_one_iteration. This is
+    the load-bearing contract for the pluggable architecture."""
+    training_yaml = _minimal_training_yaml(tmp_path / "training.yaml")
+
+    from src.workflow import Workflow
+
+    stub = StubTrainer()
+    wf = Workflow.from_config(
+        dataset=tiny_dataset["yaml_path"],
+        training=training_yaml,
+        session=tmp_path / "ws4",
+        iteration="latest",
+        trainer=stub,
+    )
+
+    result = wf.train(visualize=False)
+    assert result["success"] is True
+    assert len(stub.train_calls) == 1
+    call = stub.train_calls[0]
+    assert call["iteration"] == "latest"
+    assert call["session_path"] == tmp_path / "ws4"
+    assert call["visualize"] is False
 
 
 def test_val_optional_dataloader(tmp_path, tiny_dataset):
-    """The dataloader accepts val_images=None — returns val_loader=None.
+    """The dataloader accepts val_images=None -- returns val_loader=None.
 
     This isn't strictly a Workflow test, but it's the contract Workflow
     depends on (val-less BYOD path). Failing this means train() will crash.
@@ -137,7 +152,6 @@ def test_val_optional_dataloader(tmp_path, tiny_dataset):
         "loss": {"train": {"name": "EWDLMulticlass"}},
     }
 
-    # We need a masks_dir with one PNG per training image.
     masks_dir = tmp_path / "fake_masks"
     masks_dir.mkdir()
     from PIL import Image
