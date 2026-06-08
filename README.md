@@ -235,9 +235,6 @@ the methods paper:
 A companion **Software Impacts** paper describing this codebase as a research
 instrument is planned.
 
-The associated paper repository (LaTeX source, figures, raw data analysis
-scripts) is at <https://github.com/osmarluiz/sial-paper>.
-
 ## License
 
 MIT — see `LICENSE`.

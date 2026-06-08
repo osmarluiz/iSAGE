@@ -55,7 +55,7 @@ expert-systems
 | Field | Value |
 |---|---|
 | Description | (the one you picked above) |
-| Website | `https://github.com/osmarluiz/sial-paper` (the paper repo) once it's public |
+| Website | arXiv URL of the methods paper once it is posted |
 | Topics | (from §2) |
 | Include in the home page | ☑ Releases · ☑ Packages · ☐ Deployments · ☑ Used by · ☑ Contributors · ☐ Environments |
 
