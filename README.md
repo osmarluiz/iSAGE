@@ -161,13 +161,13 @@ that amplifies the gradient at every annotated error during training.
 
 On ISPRS Vaihingen (five classes, 0.011% labeled pixels), iSAGE matches the
 fully-supervised baseline trained on dense GT under the same protocol while
-the strongest output-reading baselines (oracle entropy and self-training
-pseudo-labeling) plateau well below dense.
+all four output-reading baselines (oracle entropy, pseudo-labeling, DenseCRF
+label propagation, uniform random) plateau well below dense.
 
 <p align="center">
   <img src="docs/images/results_vaihingen.png" alt="iSAGE vs baselines on ISPRS Vaihingen" width="700"/>
   <br/>
-  <em>mIoU progression on ISPRS Vaihingen. iSAGE: 76.78% at iter 5 (matches fully-supervised 76.65%). Oracle entropy and pseudo-labeling plateau ~8–10 points below.</em>
+  <em>mIoU progression on ISPRS Vaihingen. iSAGE: 76.78% at iter 5 (matches fully-supervised 76.65%). Oracle entropy, pseudo-labeling, and uniform random plateau 7–10 points below; DenseCRF peaks early and then degenerates as spatial smoothing compounds confident errors across iterations.</em>
 </p>
 
 Full numbers across both datasets (BsB Aerial multiclass, Vaihingen 5-class,
