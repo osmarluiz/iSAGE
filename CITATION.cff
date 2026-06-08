@@ -17,6 +17,16 @@ authors:
 repository-code: "https://github.com/osmarluiz/iSAGE"
 url: "https://github.com/osmarluiz/iSAGE"
 license: MIT
+version: "1.0.0"
+date-released: "2026-06-08"
+doi: "10.5281/zenodo.20596185"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20596185"
+    description: "Concept DOI (always resolves to the latest version)"
+  - type: doi
+    value: "10.5281/zenodo.20596186"
+    description: "v1.0.0 release DOI"
 keywords:
   - semantic segmentation
   - active learning

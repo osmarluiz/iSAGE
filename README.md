@@ -1,5 +1,8 @@
 # iSAGE
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20596185.svg)](https://doi.org/10.5281/zenodo.20596185)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Iterative Sparse Annotation Guided by Expert** — train semantic segmentation
 models from a handful of expert clicks per image. No pseudo-labels, no
 propagation, no consistency machinery between the click and the gradient.
@@ -229,6 +232,20 @@ the methods paper:
   eprint        = {XXXX.XXXXX},
   archivePrefix = {arXiv},
   primaryClass  = {cs.CV}
+}
+```
+
+If you reference the **software** itself (the iSAGE platform), cite the
+Zenodo archive:
+
+```bibtex
+@software{carvalho2026isage_software,
+  title     = {iSAGE: Iterative Sparse Annotation Guided by Expert},
+  author    = {Carvalho, Osmar Luiz Ferreira de and others},
+  year      = {2026},
+  version   = {1.0.0},
+  doi       = {10.5281/zenodo.20596185},
+  url       = {https://doi.org/10.5281/zenodo.20596185}
 }
 ```
 
