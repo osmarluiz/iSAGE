@@ -91,6 +91,34 @@ python cli.py train \
 See [`examples/bsb_toy/README.md`](examples/bsb_toy/README.md) for the full
 walkthrough.
 
+## Annotator quick reference
+
+The PyQt5 annotator (launched by cell 3 of the notebook or `python cli.py annotate ...`) is driven mostly by mouse plus a handful of keyboard shortcuts. Full details, including the UI panels and workflow tips, in [`docs/annotator-reference.md`](docs/annotator-reference.md).
+
+**Mouse:**
+
+| Action | Effect |
+|---|---|
+| Left-click on empty area | Add point of current class |
+| Left-click on a point | Drag the point |
+| Right-click near a point | Delete that point |
+| Middle-click + drag | Pan |
+| Wheel | Zoom toward cursor |
+| Space + Left-click | Force-add (bypass drag on top of existing point) |
+
+**Keyboard:**
+
+| Key | Effect |
+|---|---|
+| `1`-`9` | Select class N as the current annotation class |
+| `→` / `←` | Next / previous image |
+| `Ctrl + +` / `-` / `0` | Zoom in / out / reset |
+| `Ctrl + Z` | Undo |
+| Hold `P` | Preview prediction overlay (release to hide) |
+| Hold `G` | Preview ground-truth overlay (release to hide) |
+| `Esc` | Exit (annotations auto-save) |
+| `F1` | Help |
+
 ## How it works
 
 <p align="center">
